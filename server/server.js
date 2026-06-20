@@ -38,7 +38,8 @@ const server = http.createServer(app);
 
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  methods: ['GET', 'POST']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  credentials: true
 }));
 app.use(express.json());
 const path = require('path');
