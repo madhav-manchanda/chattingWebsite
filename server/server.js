@@ -43,7 +43,11 @@ app.use(cors({
 app.use(express.json());
 const path = require('path');
 const supabase = require('./supabase');
+// Serve static files (uploads, stickers)
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve the compiled React frontend
+app.use(express.static(path.join(__dirname, '../client/dist')));
 
 const usersRoutes = require('./routes/users');
 
@@ -177,6 +181,11 @@ io.on('connection', async (socket) => {
   socket.on('call_ended', (data) => {
     socket.to(data.targetId.toString()).emit('call_ended', data);
   });
+});
+
+// Catch-all route to serve the React app for any other request (SPA routing)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
