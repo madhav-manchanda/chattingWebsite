@@ -10,7 +10,6 @@ import ProfilePanel from './components/ProfilePanel';
 import SettingsPanel from './components/SettingsPanel';
 import GroupInfoModal from './components/GroupInfoModal';
 import { getAssetUrl } from './utils/assets';
-import './App.css';
 import SyncEngine from './services/SyncEngine';
 import WebRTCManager from './services/WebRTCManager';
 import { db } from './db/db';
