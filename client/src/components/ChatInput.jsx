@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
-import { Smile, Sticker, MonitorUp, Send, X, ImagePlus, Search } from 'lucide-react';
+import { Smile, Sticker, Send, X, ImagePlus, Search, Paperclip, Mic, Square, Edit2 } from 'lucide-react';
 import axios from 'axios';
 
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public beta key for demo
+const GIPHY_API_KEY = 'p7xUh0q9NKv3h6QyJYnqlL09gdn8MGIC';
 
 const STICKER_PACKS = [
   {
@@ -26,7 +26,7 @@ const STICKER_PACKS = [
   }
 ];
 
-export default function ChatInput({ onSendMessage, onStartScreenShare, token }) {
+export default function ChatInput({ onSendMessage, onTypingStart, onTypingStop, onStartScreenShare, token, editingMessage, replyingMessage, onEditMessage, onCancelEdit, onCancelReply }) {
   const [input, setInput] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [showStickers, setShowStickers] = useState(false);
@@ -42,6 +42,15 @@ export default function ChatInput({ onSendMessage, onStartScreenShare, token }) 
   const inputRef = useRef(null);
   const pickerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const mediaInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
 
   // Close picker on outside click
   useEffect(() => {
@@ -86,13 +95,39 @@ export default function ChatInput({ onSendMessage, onStartScreenShare, token }) 
     }
   }, [activeTab, giphySearch]);
 
+  // Handle editing message prop
+  useEffect(() => {
+    if (editingMessage) {
+      setInput(editingMessage.content);
+      if (inputRef.current) inputRef.current.focus();
+    } else if (!replyingMessage) {
+      setInput('');
+    }
+  }, [editingMessage]);
+
+  useEffect(() => {
+    if (replyingMessage) {
+      if (inputRef.current) inputRef.current.focus();
+    }
+  }, [replyingMessage]);
+
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     if (input.trim()) {
-      onSendMessage({ type: 'text', content: input });
+      if (editingMessage) {
+        onEditMessage(editingMessage.id, input);
+        if (onCancelEdit) onCancelEdit();
+      } else {
+        onSendMessage({ type: 'text', content: input });
+        if (onCancelReply) onCancelReply();
+      }
       setInput('');
       setShowEmoji(false);
       setShowStickers(false);
+      if (onTypingStop) {
+        onTypingStop();
+        clearTimeout(typingTimeoutRef.current);
+      }
       if (inputRef.current) {
         inputRef.current.style.height = 'auto';
       }
@@ -112,6 +147,13 @@ export default function ChatInput({ onSendMessage, onStartScreenShare, token }) 
     const scrollHeight = e.target.scrollHeight;
     e.target.style.height = `${Math.min(scrollHeight, 120)}px`;
     e.target.style.overflowY = scrollHeight > 120 ? 'auto' : 'hidden';
+
+    if (onTypingStart) onTypingStart();
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (onTypingStop) onTypingStop();
+    }, 1500);
   };
 
   const handleEmojiSelect = (emoji) => {
@@ -150,6 +192,95 @@ export default function ChatInput({ onSendMessage, onStartScreenShare, token }) 
   const closeAllPickers = () => {
     setShowEmoji(false);
     setShowStickers(false);
+  };
+
+  const handleMediaUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await axios.post('/api/uploads', formData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      // Detect type
+      let msgType = 'file';
+      if (file.type.startsWith('image/')) msgType = 'image';
+      else if (file.type.startsWith('video/')) msgType = 'video';
+      
+      onSendMessage({ 
+        type: msgType, 
+        content: res.data.url, 
+        filename: res.data.filename,
+        replyTo: replyingMessage ? replyingMessage.id : null
+      });
+      if (onCancelReply) onCancelReply();
+    } catch (err) {
+      console.error('Failed to upload media', err);
+    }
+  };
+
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'voice_message.webm');
+
+        try {
+          const res = await axios.post('/api/uploads', formData, {
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+          onSendMessage({ type: 'voice', content: res.data.url });
+          if (onCancelReply) onCancelReply();
+        } catch (err) {
+          console.error('Failed to upload voice message', err);
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
+    } catch (err) {
+      console.error('Microphone access denied', err);
+      alert('Could not access microphone. Please allow permissions.');
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -239,7 +370,32 @@ export default function ChatInput({ onSendMessage, onStartScreenShare, token }) 
         </div>
       )}
 
-      <form className="input-bar" onSubmit={handleSubmit}>
+      {editingMessage && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'var(--surface-1)', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+          <Edit2 size={16} style={{ color: 'var(--accent)' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>Edit Message</div>
+            <div style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{editingMessage.content}</div>
+          </div>
+          <button onClick={onCancelEdit} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%' }} className="hover-bg">
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
+      {replyingMessage && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'var(--surface-1)', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+          <div style={{ flex: 1, minWidth: 0, borderLeft: '3px solid var(--accent)', paddingLeft: '8px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>Replying to {replyingMessage.senderName}</div>
+            <div style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{replyingMessage.content || (replyingMessage.type !== 'text' ? `[${replyingMessage.type}]` : '')}</div>
+          </div>
+          <button onClick={onCancelReply} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '50%' }} className="hover-bg">
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
+      <form className="input-bar" onSubmit={handleSubmit} style={{ borderTopLeftRadius: (editingMessage || replyingMessage) ? '0' : '24px', borderTopRightRadius: (editingMessage || replyingMessage) ? '0' : '24px' }}>
         <div className="input-actions">
           <button type="button" className={`action-btn ${showEmoji ? 'active' : ''}`} onClick={() => { setShowStickers(false); setShowEmoji(!showEmoji); }} title="Emoji">
             <Smile size={20} />
@@ -247,27 +403,48 @@ export default function ChatInput({ onSendMessage, onStartScreenShare, token }) 
           <button type="button" className={`action-btn ${showStickers ? 'active' : ''}`} onClick={() => { setShowEmoji(false); setShowStickers(!showStickers); }} title="Stickers">
             <Sticker size={20} />
           </button>
-          {onStartScreenShare && (
-            <button type="button" className="action-btn" onClick={onStartScreenShare} title="Screen Share">
-              <MonitorUp size={20} />
-            </button>
-          )}
+          <button type="button" className="action-btn" onClick={() => mediaInputRef.current?.click()} title="Attach File">
+            <Paperclip size={20} />
+          </button>
+          <input 
+            type="file" 
+            ref={mediaInputRef} 
+            style={{ display: 'none' }} 
+            onChange={handleMediaUpload}
+          />
         </div>
 
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          className="message-input"
-          rows={1}
-          style={{ resize: 'none', overflowY: 'hidden' }}
-        />
+        {isRecording ? (
+          <div className="message-input" style={{ display: 'flex', alignItems: 'center', color: 'var(--danger)', fontWeight: 600 }}>
+            <span className="icon-pulse" style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--danger)', borderRadius: '50%', marginRight: '10px' }}></span>
+            Recording: {formatTime(recordingTime)}
+          </div>
+        ) : (
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={editingMessage ? "Edit your message..." : "Type a message..."}
+            className="message-input"
+            rows={1}
+            style={{ resize: 'none', overflowY: 'hidden' }}
+          />
+        )}
 
-        <button type="submit" disabled={!input.trim()} className={`send-btn ${input.trim() ? 'has-text' : ''}`}>
-          <Send size={18} className={input.trim() ? 'icon-animate-in' : ''} />
-        </button>
+        {input.trim() ? (
+          <button type="submit" className="send-btn has-text">
+            <Send size={18} className="icon-animate-in" />
+          </button>
+        ) : isRecording ? (
+          <button type="button" className="send-btn has-text" style={{ background: 'var(--danger)' }} onClick={handleStopRecording} title="Stop Recording">
+            <Square size={18} />
+          </button>
+        ) : (
+          <button type="button" className="send-btn" onMouseDown={handleStartRecording} onClick={(e) => e.preventDefault()} title="Record Voice Message">
+            <Mic size={18} />
+          </button>
+        )}
       </form>
     </div>
   );

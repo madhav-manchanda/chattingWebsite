@@ -10,6 +10,8 @@ const User = require('./models/User');
 const Relationship = require('./models/Relationship');
 const Block = require('./models/Block');
 const CustomSticker = require('./models/CustomSticker');
+const Group = require('./models/Group');
+const GroupMember = require('./models/GroupMember');
 
 // Associations
 User.hasMany(Relationship, { foreignKey: 'senderId', as: 'SentRequests' });
@@ -25,6 +27,12 @@ Block.belongsTo(User, { foreignKey: 'blockedId', as: 'Blocked' });
 User.hasMany(CustomSticker, { foreignKey: 'userId', as: 'Stickers' });
 CustomSticker.belongsTo(User, { foreignKey: 'userId' });
 
+Group.belongsToMany(User, { through: GroupMember, as: 'Members', foreignKey: 'groupId' });
+User.belongsToMany(Group, { through: GroupMember, as: 'Groups', foreignKey: 'userId' });
+Group.belongsTo(User, { as: 'Admin', foreignKey: 'adminId' });
+GroupMember.belongsTo(User, { as: 'User', foreignKey: 'userId' });
+GroupMember.belongsTo(Group, { as: 'Group', foreignKey: 'groupId' });
+
 const app = express();
 const server = http.createServer(app);
 
@@ -34,6 +42,7 @@ app.use(cors({
 }));
 app.use(express.json());
 const path = require('path');
+const supabase = require('./supabase');
 app.use(express.static(path.join(__dirname, 'public')));
 
 const usersRoutes = require('./routes/users');
@@ -41,12 +50,16 @@ const usersRoutes = require('./routes/users');
 const friendsRoutes = require('./routes/friends');
 const blocksRoutes = require('./routes/blocks');
 const stickersRoutes = require('./routes/stickers');
+const uploadsRoutes = require('./routes/uploads');
+const groupsRoutes = require('./routes/groups');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/blocks', blocksRoutes);
 app.use('/api/stickers', stickersRoutes);
+app.use('/api/uploads', uploadsRoutes);
+app.use('/api/groups', groupsRoutes);
 
 const io = new Server(server, {
   cors: {
@@ -56,22 +69,38 @@ const io = new Server(server, {
 });
 
 // Socket.io Authentication Middleware
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth.token;
   if (!token) return next(new Error('Authentication error'));
   
-  jwt.verify(token, process.env.JWT_SECRET || 'fallback_retro_secret_key', async (err, decoded) => {
-    if (err) return next(new Error('Authentication error'));
-    const user = await User.findByPk(decoded.id);
-    if (!user) return next(new Error('User not found'));
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return next(new Error('Authentication error'));
     
-    socket.user = user;
+    const dbUser = await User.findByPk(user.id);
+    if (!dbUser) return next(new Error('User not found'));
+    
+    socket.user = dbUser;
     next();
-  });
+  } catch (err) {
+    next(new Error('Authentication error'));
+  }
 });
 
 io.on('connection', async (socket) => {
   console.log(`User connected: ${socket.user.name} (${socket.id})`);
+  
+  // User joins a personal room based on their ID for targeted messaging
+  socket.join(socket.user.id.toString());
+
+  // Join group rooms
+  try {
+    const GroupMember = require('./models/GroupMember');
+    const userGroups = await GroupMember.findAll({ where: { userId: socket.user.id } });
+    userGroups.forEach(gm => socket.join(gm.groupId.toString()));
+  } catch(e) {
+    console.error("Error joining group rooms:", e);
+  }
   
   // Update presence
   await socket.user.update({ isOnline: true });
@@ -85,8 +114,8 @@ io.on('connection', async (socket) => {
   
   // Real-time chat events
   socket.on('send_message', (data) => {
-    // Broadcast to others, in a real app would be to a specific room/user
-    socket.broadcast.emit('receive_message', data);
+    // Send to receiver (user or group) AND sender's other devices
+    socket.to(data.receiverId.toString()).to(socket.user.id.toString()).emit('receive_message', data);
     
     // Send acknowledgement back to sender
     socket.emit('message_status', { id: data.id, status: 'SENT' });
@@ -108,33 +137,45 @@ io.on('connection', async (socket) => {
     socket.broadcast.emit('message_deleted', data);
   });
 
+  socket.on('react_message', (data) => {
+    socket.to(data.receiverId.toString()).to(socket.user.id.toString()).emit('message_reacted', data);
+  });
+
+  socket.on('typing_start', (data) => {
+    socket.to(data.receiverId.toString()).emit('typing_start', { receiverId: data.receiverId, senderId: socket.user.id });
+  });
+
+  socket.on('typing_stop', (data) => {
+    socket.to(data.receiverId.toString()).emit('typing_stop', { receiverId: data.receiverId, senderId: socket.user.id });
+  });
+
   // WebRTC Signaling (Targeted instead of Broadcast)
   socket.on('offer', (data) => {
-    socket.broadcast.emit('offer', data);
+    socket.to(data.targetId.toString()).emit('offer', data);
   });
 
   socket.on('answer', (data) => {
-    socket.broadcast.emit('answer', data);
+    socket.to(data.targetId.toString()).emit('answer', data);
   });
 
   socket.on('ice-candidate', (data) => {
-    socket.broadcast.emit('ice-candidate', data);
+    socket.to(data.targetId.toString()).emit('ice-candidate', data);
   });
 
   socket.on('call_initiated', (data) => {
-    socket.broadcast.emit('call_initiated', data);
+    socket.to(data.targetId.toString()).emit('call_initiated', data);
   });
 
   socket.on('call_accepted', (data) => {
-    socket.broadcast.emit('call_accepted', data);
+    socket.to(data.targetId.toString()).emit('call_accepted', data);
   });
 
   socket.on('call_rejected', (data) => {
-    socket.broadcast.emit('call_rejected', data);
+    socket.to(data.targetId.toString()).emit('call_rejected', data);
   });
 
   socket.on('call_ended', (data) => {
-    socket.broadcast.emit('call_ended', data);
+    socket.to(data.targetId.toString()).emit('call_ended', data);
   });
 });
 

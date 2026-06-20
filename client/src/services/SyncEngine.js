@@ -12,7 +12,16 @@ class SyncEngine {
 
     // Listen for message status updates (e.g. SENT, DELIVERED)
     this.socket.on('message_status', async (data) => {
-      await db.messages.update(data.id, { status: data.status, syncStatus: 'synced' });
+      const msg = await db.messages.get(data.id);
+      if (msg) {
+        const levels = { 'SENT': 1, 'DELIVERED': 2, 'READ': 3 };
+        const currentLevel = levels[msg.status] || 0;
+        const newLevel = levels[data.status] || 0;
+        
+        if (newLevel > currentLevel) {
+          await db.messages.update(data.id, { status: data.status, syncStatus: 'synced' });
+        }
+      }
     });
 
     // Handle edits and deletions
@@ -27,6 +36,23 @@ class SyncEngine {
         if (data.scope === 'everyone') {
           await db.messages.update(data.id, { isDeleted: true, content: '🚫 This message was deleted.' });
         }
+      }
+    });
+
+    this.socket.on('message_reacted', async (data) => {
+      const msg = await db.messages.get(data.id);
+      if (msg) {
+        const currentReactions = msg.reactions || {};
+        if (data.isAdd) {
+          if (!currentReactions[data.emoji]) currentReactions[data.emoji] = [];
+          if (!currentReactions[data.emoji].includes(data.userId)) currentReactions[data.emoji].push(data.userId);
+        } else {
+          if (currentReactions[data.emoji]) {
+            currentReactions[data.emoji] = currentReactions[data.emoji].filter(id => id !== data.userId);
+            if (currentReactions[data.emoji].length === 0) delete currentReactions[data.emoji];
+          }
+        }
+        await db.messages.update(data.id, { reactions: currentReactions });
       }
     });
   }

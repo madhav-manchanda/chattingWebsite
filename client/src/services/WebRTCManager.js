@@ -106,8 +106,8 @@ class WebRTCManager {
       } else {
         newStream = await navigator.mediaDevices.getUserMedia({
           video: type === 'video' ? {
-            width: { min: 1280, ideal: 2560 },
-            height: { min: 720, ideal: 1440 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
             frameRate: { ideal: 30 }
           } : false,
           audio: true
