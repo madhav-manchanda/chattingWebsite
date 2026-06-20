@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Users, Shield, Trash2, LogOut, UserMinus, ChevronDown, Check, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
+import { getAssetUrl } from '../utils/assets';
 
 export default function GroupInfoModal({
   group,
@@ -117,7 +118,7 @@ export default function GroupInfoModal({
                   <div key={member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', background: 'var(--surface-2)', borderRadius: '8px', position: 'relative' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                        {member.avatar ? <img src={member.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : member.name[0]}
+                        {member.avatar ? <img src={getAssetUrl(member.avatar)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : member.name[0]}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontWeight: 500 }}>{isMe ? 'You' : member.name}</span>

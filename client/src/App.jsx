@@ -9,6 +9,9 @@ import ChatInput from './components/ChatInput';
 import ProfilePanel from './components/ProfilePanel';
 import SettingsPanel from './components/SettingsPanel';
 import GroupInfoModal from './components/GroupInfoModal';
+import Register from './components/Register';
+import { getAssetUrl } from './utils/assets';
+import './App.css';
 import SyncEngine from './services/SyncEngine';
 import WebRTCManager from './services/WebRTCManager';
 import { db } from './db/db';
@@ -248,9 +251,10 @@ function App() {
   useEffect(() => {
     if (!token) return;
 
-    socket = io('/', { 
+    socket = io(import.meta.env.VITE_API_URL || '/', { 
       path: '/socket.io',
-      auth: { token }
+      auth: { token },
+      transports: ['websocket']
     });
     
     syncEngine = new SyncEngine(socket);
@@ -738,7 +742,7 @@ function App() {
               {(!remoteStream || activeCall?.callType === 'audio') && (
                 <div className="call-empty-video">
                   {activeCall.peerAvatar ? (
-                    <img src={activeCall.peerAvatar} alt="avatar" className="call-empty-avatar" style={{ objectFit: 'cover' }} />
+                    <img src={getAssetUrl(activeCall.peerAvatar)} alt="avatar" className="call-empty-avatar" style={{ objectFit: 'cover' }} />
                   ) : (
                     <div className="call-empty-avatar">{activeCall.peerName ? activeCall.peerName[0].toUpperCase() : '?'}</div>
                   )}
@@ -809,7 +813,7 @@ function App() {
                             <div className="msg-sticker">{m.content}</div>
                           ) : m.type === 'custom_sticker' ? (
                             <div className="msg-custom-sticker" style={{ padding: '4px' }}>
-                              <img src={m.content} alt="sticker" style={{ maxWidth: '160px', borderRadius: '8px' }} />
+                              <img src={getAssetUrl(m.content)} alt="sticker" style={{ maxWidth: '160px', borderRadius: '8px' }} />
                             </div>
                           ) : (
                             <div className="msg-text">
@@ -863,7 +867,7 @@ function App() {
                 >
                   <div className="chat-avatar-wrapper">
                   {activeChat.avatar ? (
-                    <img src={activeChat.avatar} alt="avatar" className="avatar" style={{ objectFit: 'cover' }} />
+                    <img src={getAssetUrl(activeChat.avatar)} alt="avatar" className="avatar" style={{ objectFit: 'cover' }} />
                   ) : (
                     <div className="avatar">
                       {activeChat.isGroup ? <Users size={20} color="#fff" /> : getInitials(activeChat.name)}
@@ -940,22 +944,24 @@ function App() {
                           </span>
                         </div>
                       ) : m.type === 'sticker' ? (
-                        <div className="msg-sticker">{m.content}</div>
+                        <div className="msg-sticker">
+                          <img src={getAssetUrl(m.content)} alt="sticker" style={{ maxWidth: '160px', borderRadius: '8px' }} />
+                        </div>
                       ) : m.type === 'custom_sticker' ? (
                         <div className="msg-custom-sticker" style={{ padding: '4px' }}>
-                          <img src={m.content} alt="sticker" style={{ maxWidth: '160px', borderRadius: '8px' }} />
+                          <img src={getAssetUrl(m.content)} alt="sticker" style={{ maxWidth: '160px', borderRadius: '8px' }} />
                         </div>
                       ) : m.type === 'image' ? (
                         <div className="msg-image" style={{ padding: '4px' }}>
-                          <img src={m.content} alt="attachment" style={{ maxWidth: '240px', borderRadius: '8px', display: 'block' }} />
+                          <img src={getAssetUrl(m.content)} alt="attachment" style={{ maxWidth: '240px', borderRadius: '8px', display: 'block' }} />
                         </div>
                       ) : m.type === 'video' ? (
                         <div className="msg-video" style={{ padding: '4px' }}>
-                          <video src={m.content} controls style={{ maxWidth: '240px', borderRadius: '8px', display: 'block' }} />
+                          <video src={getAssetUrl(m.content)} controls style={{ maxWidth: '240px', borderRadius: '8px', display: 'block' }} />
                         </div>
                       ) : m.type === 'voice' ? (
                         <div className="msg-voice" style={{ maxWidth: '280px', width: '100%', boxSizing: 'border-box' }}>
-                          <CustomAudioPlayer src={m.content} />
+                          <CustomAudioPlayer src={getAssetUrl(m.content)} />
                         </div>
                       ) : m.type === 'file' ? (
                         <div className="msg-file" style={{ padding: '8px', maxWidth: '280px' }}>

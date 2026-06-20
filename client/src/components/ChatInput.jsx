@@ -3,6 +3,7 @@ import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 import { Smile, Sticker, Send, X, ImagePlus, Search, Paperclip, Mic, Square, Edit2 } from 'lucide-react';
 import axios from 'axios';
+import { getAssetUrl } from '../utils/assets';
 
 const GIPHY_API_KEY = 'p7xUh0q9NKv3h6QyJYnqlL09gdn8MGIC';
 
@@ -334,7 +335,7 @@ export default function ChatInput({ onSendMessage, onTypingStart, onTypingStop, 
                 <div className="sticker-grid">
                   {giphyResults.map(gif => (
                     <button key={gif.id} className="sticker-item" style={{ padding: '2px' }} onClick={() => handleStickerSelect(gif.url, true)}>
-                      <img src={gif.url} alt="gif" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                      <img src={getAssetUrl(gif.url)} alt="gif" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
                     </button>
                   ))}
                 </div>
@@ -360,7 +361,7 @@ export default function ChatInput({ onSendMessage, onTypingStart, onTypingStop, 
                 <div className="sticker-grid">
                   {customStickers.map(s => (
                     <button key={s.id} className="sticker-item" style={{ padding: '2px' }} onClick={() => handleStickerSelect(s.imageUrl, true)}>
-                      <img src={s.imageUrl} alt="custom" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                      <img src={getAssetUrl(s.imageUrl)} alt="custom" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
                     </button>
                   ))}
                 </div>

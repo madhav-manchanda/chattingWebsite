@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Users, Settings, LogOut, Sun, Moon, UserPlus, UserX, UserCheck, ShieldAlert, Sparkles, Bell, X, User, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import { getAssetUrl } from '../utils/assets';
 
 export default function Sidebar({ 
   user, activeChat, onSelectChat, token, socket, searchQuery, setSearchQuery, 
@@ -179,7 +180,7 @@ export default function Sidebar({
             >
               <div className="contact-avatar-wrapper">
                 {contact.avatar ? (
-                  <img src={contact.avatar} alt="avatar" className="avatar" style={{ objectFit: 'cover' }} />
+                  <img src={getAssetUrl(contact.avatar)} alt="avatar" className="avatar" style={{ objectFit: 'cover' }} />
                 ) : (
                   <div className="avatar">
                     {contact.isGroup ? <Users size={16} color="#fff" /> : getInitials(contact.name)}
@@ -338,14 +339,14 @@ export default function Sidebar({
         {/* Profile Avatar + Dropdown */}
         <div className="profile-wrapper" ref={dropdownRef}>
           <div className="top-user-avatar" onClick={() => setShowDropdown(!showDropdown)} style={{ cursor: 'pointer' }}>
-            {user?.avatar ? <img src={user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--r-full)' }} /> : (user?.name ? user.name[0].toUpperCase() : 'U')}
+            {user?.avatar ? <img src={getAssetUrl(user.avatar)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--r-full)' }} /> : (user?.name ? user.name[0].toUpperCase() : 'U')}
           </div>
 
           {showDropdown && (
             <div className="profile-dropdown" style={{ width: '220px', left: 'auto', right: 0, top: 'auto', bottom: 'calc(100% + 12px)', transformOrigin: 'bottom right' }}>
               <div className="profile-dropdown-header">
                 <div className="profile-dropdown-avatar">
-                  {user?.avatar ? <img src={user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--r-full)' }} /> : (user?.name ? user.name[0].toUpperCase() : 'U')}
+                  {user?.avatar ? <img src={getAssetUrl(user.avatar)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--r-full)' }} /> : (user?.name ? user.name[0].toUpperCase() : 'U')}
                 </div>
                 <div className="profile-dropdown-info">
                   <span className="profile-dropdown-name">{user?.name || 'User'}</span>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, User, Mail, AtSign, Camera } from 'lucide-react';
 import axios from 'axios';
+import { getAssetUrl } from '../utils/assets';
 
 export default function ProfilePanel({ user, token, onClose, onUpdateUser }) {
   const [name, setName] = useState(user?.name || '');
@@ -59,7 +60,7 @@ export default function ProfilePanel({ user, token, onClose, onUpdateUser }) {
               onClick={() => fileInputRef.current?.click()}
             >
               {avatar ? (
-                <img src={avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={getAssetUrl(avatar)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 user?.name ? user.name[0].toUpperCase() : 'U'
               )}
